@@ -17,7 +17,6 @@ var serverMutex = sync.Mutex
 var commitTestersMap = make(map[string]string)
 var testersList = []string{}
 var commitsToTest = []string{}
-var deadTester = make(chan string)
 
 func listen(serverIP, serverPort string) {
 	server := serverIP + communicator.Colon + serverPort
@@ -97,12 +96,12 @@ func handleRequest(conn net.Conn) {
 
 func assignTester(commitToTest string) {
 	commitAssigned := false
-	for i := 0; i < len(testersList); i++ {
-		tokens := strings.Split(testersList[i], communicator.Colon)
+	for _, tester := range testersList {
+		tokens := strings.Split(tester, communicator.Colon)
 		testerIP, testerPort := tokens[0], tokens[1]
 		resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.HelloMsg)
 		if resp == communicator.HelloMsg {
-			commitTestersMap[commitToTest] = testersList[i]
+			commitTestersMap[commitToTest] = tester
 			communicator.SendData(serverIP, serverPort, communicator.OkMsg)
 			commitAssigned = true
 			break
@@ -124,7 +123,7 @@ func watchTesters() {
 				serverMutex.Lock()
 				log.Println("Removing tester running at %s:%s", testerIP, testerPort)
 				// Remove the tester
-				failedCommit := getMapKeyFromValue(tokens)
+				failedCommit := getMapKeyFromValue(testersList[i])
 				commitsToTest = append(commitsToTest, failedCommit)
 				testersList = append(testersList[:index], testersList[index+1:])
 				serverMutex.Unlock()
@@ -146,7 +145,6 @@ func getMapKeyFromValue(value string) {
 func recoverFailedTests() {
 	for {
 		for _, recoverCommit := range commitsToTest {
-			recoverCommit := getMapKeyFromValue(failedTester)
 			serverMutex.Lock()
 			assignTester(recoverCommit)
 			serverMutex.Unlock()
@@ -168,7 +166,7 @@ func main() {
 	fmt.Println(*serverIPPtr, *serverPortPtr)
 
 	// Start watching the given repository path
-	listen(*serverIPPtr, *serverPortPtr)
+	go listen(*serverIPPtr, *serverPortPtr)
 
 	// Watch for testers failing
 	go watchTesters()
