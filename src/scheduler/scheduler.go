@@ -121,10 +121,13 @@ func watchTesters() {
 			testerIP, testerPort := tokens[0], tokens[1]
 			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.HelloMsg)
 			if resp != communicator.HelloMsg {
+				serverMutex.Lock()
 				log.Println("Removing tester running at %s:%s", testerIP, testerPort)
 				// Remove the tester
-				deadTester <- testersList[index]
+				failedCommit := getMapKeyFromValue(tokens)
+				commitsToTest = append(commitsToTest, failedCommit)
 				testersList = append(testersList[:index], testersList[index+1:])
+				serverMutex.Unlock()
 			}
 		}
 		time.Sleep(5)
@@ -142,10 +145,12 @@ func getMapKeyFromValue(value string) {
 
 func recoverFailedTests() {
 	for {
-		failedTester := <-deadTester
-		// Find if any commit was handed to this failed tester
-		recoverCommit := getMapKeyFromValue(failedTester)
-		assignTester(recoverCommit)
+		for _, recoverCommit := range commitsToTest {
+			recoverCommit := getMapKeyFromValue(failedTester)
+			serverMutex.Lock()
+			assignTester(recoverCommit)
+			serverMutex.Unlock()
+		}
 		time.Sleep(5)
 	}
 }
