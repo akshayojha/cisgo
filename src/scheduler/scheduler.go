@@ -67,29 +67,25 @@ func handleRequest(conn net.Conn) {
 	if statMsg && header == communicator.StatMsg {
 		communicator.SendData(serverIP, serverPort, communicator.OkMsg)
 	} else {
+		serverMutex.Lock()
 		if contMsg && header == communicator.RegMsg {
-			serverMutex.Lock()
 			testerInfo := msgCont
 			testersList = append(testersList, testerInfo)
 			tokens := strings.Split(testerInfo, communicator.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
 			communicator.SendData(testerIP, testerPort, communicator.OkMsg)
-			serverMutex.Unlock()
 		} else if contMsg && header == communicator.ResMsg {
-			serverMutex.Lock()
 			resForCommit := msgCont[0]
 			result := msgCont[1:]
 			writeResultToFile(resForCommit, result)
-			delete(commitTestersMap[hash])
-			serverMutex.Unlock()
+			delete(commitTestersMap[resForCommit])
 		} else if contMsg && header == communicator.TestMsg {
-			serverMutex.Lock()
 			commitToTest := msgCont
 			assignTester(commitToTest)
-			serverMutex.Unlock()
 		} else {
 			log.Println("Unknown Request %s", resp)
 		}
+		serverMutex.Unlock()
 	}
 	conn.Close()
 }
