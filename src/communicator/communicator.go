@@ -64,7 +64,7 @@ const GitResetToCommitCmd = "git reset --hard"
 // Testing command
 
 // GoTestCmd - command to run all go tests for a project
-const GoTestCmd = "go test -run ''"
+const GoTestCmd = "go test ./..."
 
 // SendAndReceiveData : Function to send given data
 // on the given ip and port. Returns the response
