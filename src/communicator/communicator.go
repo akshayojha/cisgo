@@ -40,6 +40,32 @@ const ResMsg = "RESULT"
 // Dash - string to seperate message type from content
 const Dash = "-"
 
+// EmptyStr - string to denote empty string
+const EmptyStr = ""
+
+// WaitInterval - integer representing interval to wait before
+// doing the same operation again
+const WaitInterval = 5
+
+// Version control system specific commands
+
+// GitHashCmd - command to get last git commit hash
+const GitHashCmd = "git rev-parse HEAD"
+
+// GitPullCmd - command to fetch and apply latest git commit
+const GitPullCmd = "git pull"
+
+// GitCleanCmd - command to clean the repository
+const GitCleanCmd = "git clean -d -f -x"
+
+// GitResetToCommitCmd - command to reset the repository to given commit
+const GitResetToCommitCmd = "git reset --hard"
+
+// Testing command
+
+// GoTestCmd - command to run all go tests for a project
+const GoTestCmd = "go test -run ''"
+
 // SendAndReceiveData : Function to send given data
 // on the given ip and port. Returns the response
 func SendAndReceiveData(ip, port, data string) string {

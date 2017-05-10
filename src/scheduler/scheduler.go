@@ -30,7 +30,7 @@ func listen(serverIP, serverPort string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		go handleRequest(conn)
+		go handleRequest(conn, serverIP, serverPort)
 	}
 }
 
@@ -48,7 +48,7 @@ func writeResultToFile(hash, result string) {
 	}
 }
 
-func handleRequest(conn net.Conn) {
+func handleRequest(conn net.Conn, serverIP, serverPort string) {
 	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDel)
 
 	if err != nil {
@@ -80,7 +80,7 @@ func handleRequest(conn net.Conn) {
 			delete(commitTestersMap[resForCommit])
 		} else if contMsg && header == communicator.TestMsg {
 			commitToTest := msgCont
-			assignTester(commitToTest)
+			assignTester(commitToTest, serverIP, serverPort)
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
 		}
@@ -89,7 +89,7 @@ func handleRequest(conn net.Conn) {
 	conn.Close()
 }
 
-func assignTester(commitToTest string) {
+func assignTester(commitToTest, serverIP, serverPort string) {
 	commitAssigned := false
 	for _, tester := range testersList {
 		tokens := strings.Split(tester, communicator.Colon)
@@ -113,8 +113,8 @@ func watchTesters() {
 		for index := 0; index < len(testersList); index++ {
 			tokens := strings.Split(testersList[i], communicator.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
-			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.HelloMsg)
-			if resp != communicator.HelloMsg {
+			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.StatMsg)
+			if resp != communicator.OkMsg {
 				serverMutex.Lock()
 				log.Printf("Removing tester running at %s:%s\n", testerIP, testerPort)
 				// Remove the tester
@@ -124,7 +124,7 @@ func watchTesters() {
 				serverMutex.Unlock()
 			}
 		}
-		time.Sleep(5)
+		time.Sleep(communicator.WaitInterval)
 	}
 }
 
@@ -137,14 +137,14 @@ func getMapKeyFromValue(value string) {
 	log.Fatalf("Can't find value %s in %s\n", value, commitTestersMap)
 }
 
-func recoverFailedTests() {
+func recoverFailedTests(serverIP, serverPort string) {
 	for {
 		for _, recoverCommit := range commitsToTest {
 			serverMutex.Lock()
 			assignTester(recoverCommit)
 			serverMutex.Unlock()
 		}
-		time.Sleep(5)
+		time.Sleep(communicator.WaitInterval)
 	}
 }
 
@@ -168,5 +168,5 @@ func main() {
 
 	// Try to assign commits on failed testers to
 	// new testers
-	go recoverFailedTests()
+	go recoverFailedTests(*serverIPPtr, *serverPortPtr)
 }
