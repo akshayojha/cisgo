@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"communicator"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -25,7 +24,7 @@ func listen(serverIP, serverPort string) {
 		log.Fatal(err)
 	}
 	listner.Close()
-	log.Println("Listening on %s:%s", serverIP, serverPort)
+	log.Printf("Listening on %s:%s \n", serverIP, serverPort)
 	for {
 		conn, err := listner.Accept()
 		if err != nil {
@@ -83,7 +82,7 @@ func handleRequest(conn net.Conn) {
 			commitToTest := msgCont
 			assignTester(commitToTest)
 		} else {
-			log.Println("Unknown Request %s", resp)
+			log.Printf("Unknown Request %s\n", resp)
 		}
 		serverMutex.Unlock()
 	}
@@ -117,7 +116,7 @@ func watchTesters() {
 			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.HelloMsg)
 			if resp != communicator.HelloMsg {
 				serverMutex.Lock()
-				log.Println("Removing tester running at %s:%s", testerIP, testerPort)
+				log.Printf("Removing tester running at %s:%s\n", testerIP, testerPort)
 				// Remove the tester
 				failedCommit := getMapKeyFromValue(testersList[i])
 				commitsToTest = append(commitsToTest, failedCommit)
@@ -135,7 +134,7 @@ func getMapKeyFromValue(value string) {
 			return k
 		}
 	}
-	log.Fatal("Can't find value %s in %s", value, commitTestersMap)
+	log.Fatalf("Can't find value %s in %s\n", value, commitTestersMap)
 }
 
 func recoverFailedTests() {
@@ -159,7 +158,7 @@ func main() {
 
 	flag.Parse()
 
-	fmt.Println(*serverIPPtr, *serverPortPtr)
+	log.Printf("Starting scheduler server at %s:%s\n", *serverIPPtr, *serverPortPtr)
 
 	// Start watching the given repository path
 	go listen(*serverIPPtr, *serverPortPtr)

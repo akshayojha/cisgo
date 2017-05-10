@@ -50,12 +50,12 @@ func watch(serverIP, serverPort, repoFolder string) {
 			if resp == communicator.OkMsg {
 				resp := communicator.SendAndReceiveData(serverIP, serverPort, latestCommitHash+communicator.MsgDel)
 				if resp == communicator.OkMsg {
-					log.Println("Scheduled tests for %s", latestCommitHash)
+					log.Printf("Scheduled tests for %s \n", latestCommitHash)
 				} else {
-					log.Println("Unable to schedule test for %s", latestCommitHash)
+					log.Printf("Unable to schedule test for %s \n", latestCommitHash)
 				}
 			} else {
-				log.Println("Cannot communicate with server on %s:%s", serverIP, serverPort)
+				log.Printf("Cannot communicate with server on %s:%s \n", serverIP, serverPort)
 			}
 		} else {
 			log.Println("No new commit found")
@@ -87,7 +87,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	fmt.Println(*schedServerIPPtr, *schedServerPortPtr, *repoPathPtr)
+	log.Printf("Watching %s at %s:%s \n", *repoPathPtr, *schedServerIPPtr, *schedServerPortPtr)
 
 	// Start watching the given repository path
 	watch(*schedServerIPPtr, *schedServerPortPtr, *repoPathPtr)
