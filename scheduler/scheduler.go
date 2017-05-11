@@ -23,12 +23,19 @@ func listen(serverIP, serverPort string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	listner.Close()
 	log.Printf("Listening on %s:%s \n", serverIP, serverPort)
+	// Watch for testers failing
+	go watchTesters()
+
+	// Try to assign commits on failed testers to
+	// new testers
+	go recoverFailedTests(serverIP, serverPort)
+
 	for {
 		conn, err := listner.Accept()
 		if err != nil {
 			log.Fatal(err)
+			listner.Close()
 		}
 		go handleRequest(conn, serverIP, serverPort)
 	}
@@ -162,12 +169,5 @@ func main() {
 	log.Printf("Starting scheduler server at %s:%s\n", *serverIPPtr, *serverPortPtr)
 
 	// Start watching the given repository path
-	go listen(*serverIPPtr, *serverPortPtr)
-
-	// Watch for testers failing
-	go watchTesters()
-
-	// Try to assign commits on failed testers to
-	// new testers
-	go recoverFailedTests(*serverIPPtr, *serverPortPtr)
+	listen(*serverIPPtr, *serverPortPtr)
 }
