@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"cisgo/src/communicator"
+	"cisgo/util"
 	"flag"
 	"log"
 	"net"
@@ -18,8 +18,8 @@ var testersList = []string{}
 var commitsToTest = []string{}
 
 func listen(serverIP, serverPort string) {
-	server := serverIP + communicator.Colon + serverPort
-	listner, err := net.Listen(communicator.Protocol, server)
+	server := serverIP + util.Colon + serverPort
+	listner, err := net.Listen(util.Protocol, server)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -49,36 +49,36 @@ func writeResultToFile(hash, result string) {
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort string) {
-	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDelByte)
+	resp, err := bufio.NewReader(conn).ReadString(util.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	// Tokenize the protocol
-	msg := strings.Split(resp, communicator.Dash)
+	msg := strings.Split(resp, util.Dash)
 
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
 	header := msg[0]
 	msgCont := msg[1]
 
-	if statMsg && header == communicator.StatMsg {
-		communicator.SendData(serverIP, serverPort, communicator.OkMsg)
+	if statMsg && header == util.StatMsg {
+		util.SendData(serverIP, serverPort, util.OkMsg)
 	} else {
 		serverMutex.Lock()
-		if contMsg && header == communicator.RegMsg {
+		if contMsg && header == util.RegMsg {
 			testerInfo := msgCont
 			testersList = append(testersList, testerInfo)
-			tokens := strings.Split(testerInfo, communicator.Colon)
+			tokens := strings.Split(testerInfo, util.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
-			communicator.SendData(testerIP, testerPort, communicator.OkMsg)
-		} else if contMsg && header == communicator.ResMsg {
+			util.SendData(testerIP, testerPort, util.OkMsg)
+		} else if contMsg && header == util.ResMsg {
 			resForCommit := msg[1]
 			result := msg[2]
 			writeResultToFile(resForCommit, result)
 			delete(commitTestersMap, resForCommit)
-		} else if contMsg && header == communicator.TestMsg {
+		} else if contMsg && header == util.TestMsg {
 			commitToTest := msgCont
 			assignTester(commitToTest, serverIP, serverPort)
 		} else {
@@ -92,29 +92,29 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 func assignTester(commitToTest, serverIP, serverPort string) {
 	commitAssigned := false
 	for _, tester := range testersList {
-		tokens := strings.Split(tester, communicator.Colon)
+		tokens := strings.Split(tester, util.Colon)
 		testerIP, testerPort := tokens[0], tokens[1]
-		resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.HelloMsg)
-		if resp == communicator.HelloMsg {
+		resp := util.SendAndReceiveData(testerIP, testerPort, util.HelloMsg)
+		if resp == util.HelloMsg {
 			commitTestersMap[commitToTest] = tester
-			communicator.SendData(serverIP, serverPort, communicator.OkMsg)
+			util.SendData(serverIP, serverPort, util.OkMsg)
 			commitAssigned = true
 			break
 		}
 	}
 	if commitAssigned == false {
 		commitsToTest = append(commitsToTest, commitToTest)
-		communicator.SendData(serverIP, serverPort, communicator.FailMsg)
+		util.SendData(serverIP, serverPort, util.FailMsg)
 	}
 }
 
 func watchTesters() {
 	for {
 		for index := 0; index < len(testersList); index++ {
-			tokens := strings.Split(testersList[index], communicator.Colon)
+			tokens := strings.Split(testersList[index], util.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
-			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.StatMsg)
-			if resp != communicator.OkMsg {
+			resp := util.SendAndReceiveData(testerIP, testerPort, util.StatMsg)
+			if resp != util.OkMsg {
 				serverMutex.Lock()
 				log.Printf("Removing tester running at %s:%s\n", testerIP, testerPort)
 				// Remove the tester
@@ -124,7 +124,7 @@ func watchTesters() {
 				serverMutex.Unlock()
 			}
 		}
-		time.Sleep(communicator.WaitInterval)
+		time.Sleep(util.WaitInterval)
 	}
 }
 
@@ -145,7 +145,7 @@ func recoverFailedTests(serverIP, serverPort string) {
 			assignTester(recoverCommit, serverIP, serverPort)
 			serverMutex.Unlock()
 		}
-		time.Sleep(communicator.WaitInterval)
+		time.Sleep(util.WaitInterval)
 	}
 }
 

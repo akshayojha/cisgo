@@ -1,10 +1,11 @@
-package communicator
+package util
 
 import (
 	"bufio"
 	"fmt"
 	"log"
 	"net"
+	"os/exec"
 )
 
 // FailMsg - string returned on error
@@ -52,22 +53,28 @@ const WaitInterval = 5
 
 // Version control system specific commands
 
-// GitHashCmd - command to get last git commit hash
-const GitHashCmd = "git rev-parse HEAD"
+// GitExecutable - command to run git
+const GitExecutable = "git"
 
-// GitPullCmd - command to fetch and apply latest git commit
-const GitPullCmd = "git pull"
+// GitHashSwitch - command to get last git commit hash
+var GitHashSwitch = []string{"rev-parse", "HEAD"}
 
-// GitCleanCmd - command to clean the repository
-const GitCleanCmd = "git clean -d -f -x"
+// GitPullSwitch - command to fetch and apply latest git commit
+var GitPullSwitch = []string{"pull"}
 
-// GitResetToCommitCmd - command to reset the repository to given commit
-const GitResetToCommitCmd = "git reset --hard"
+// GitCleanSwitch - command to clean the repository
+var GitCleanSwitch = []string{"clean", "-d", "-f", "-x"}
+
+// GitResetToCommitSwitch - command to reset the repository to given commit
+var GitResetToCommitSwitch = []string{"reset", "--hard"}
 
 // Testing command
 
-// GoTestCmd - command to run all go tests for a project
-const GoTestCmd = "go test ./..."
+// GoExecutable - command to run go
+const GoExecutable = "go"
+
+// GoTestSwitch - command to run all go tests for a project
+var GoTestSwitch = []string{"test", "./..."}
 
 // SendAndReceiveData : Function to send given data
 // on the given ip and port. Returns the response
@@ -97,4 +104,16 @@ func SendData(ip, port, data string) {
 		return
 	}
 	fmt.Fprintf(conn, data+MsgDel)
+}
+
+// RunOrFail : Function to run a command and return
+// the output or fail trying
+func RunOrFail(cmd string, arg []string) string {
+	out, err := exec.Command(cmd, arg...).Output()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return string(out)
 }

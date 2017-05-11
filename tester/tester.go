@@ -2,12 +2,11 @@ package main
 
 import (
 	"bufio"
-	"cisgo/src/communicator"
+	"cisgo/util"
 	"flag"
 	"log"
 	"net"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 )
@@ -17,18 +16,18 @@ var testerBusy = make(chan bool)
 
 func watchScheduler(serverIP, serverPort string) {
 	for {
-		resp := communicator.SendAndReceiveData(serverIP, serverPort, communicator.StatMsg)
-		if resp != communicator.OkMsg {
+		resp := util.SendAndReceiveData(serverIP, serverPort, util.StatMsg)
+		if resp != util.OkMsg {
 			log.Fatalf("Scheduler at %s:%s is no longer active\n", serverIP, serverPort)
 			serverAlive <- false
 		}
-		time.Sleep(communicator.WaitInterval)
+		time.Sleep(util.WaitInterval)
 	}
 }
 
 func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
-	server := testerIP + communicator.Colon + testerPort
-	listner, err := net.Listen(communicator.Protocol, server)
+	server := testerIP + util.Colon + testerPort
+	listner, err := net.Listen(util.Protocol, server)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -48,33 +47,33 @@ func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
-	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDelByte)
+	resp, err := bufio.NewReader(conn).ReadString(util.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
 	}
 
 	// Tokenize the protocol
-	msg := strings.Split(resp, communicator.Dash)
+	msg := strings.Split(resp, util.Dash)
 
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
 	header := msg[0]
 	msgCont := msg[1]
 
-	if statMsg && header == communicator.StatMsg {
-		communicator.SendData(serverIP, serverPort, communicator.OkMsg)
+	if statMsg && header == util.StatMsg {
+		util.SendData(serverIP, serverPort, util.OkMsg)
 	} else {
-		if contMsg && header == communicator.TestMsg {
+		if contMsg && header == util.TestMsg {
 			busy := <-testerBusy
 			if busy == true {
-				communicator.SendData(serverIP, serverPort, communicator.FailMsg)
+				util.SendData(serverIP, serverPort, util.FailMsg)
 			} else {
 				commitToTest := msgCont
 				// Start running test for the
 				testerBusy <- true
 				go runTest(commitToTest, serverIP, serverPort, repo)
-				communicator.SendData(serverIP, serverPort, communicator.OkMsg)
+				util.SendData(serverIP, serverPort, util.OkMsg)
 			}
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
@@ -83,31 +82,20 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 	conn.Close()
 }
 
-func runOrFail(cmd string, arg string) string {
-	out, err := exec.Command(cmd, arg)
-
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	return out
-}
-
 func runTest(commit, serverIP, serverPort, repo string) {
 	// Clean the repo
-	runOrFail(communicator.GitCleanCmd)
+	util.RunOrFail(util.GitExecutable, util.GitCleanSwitch)
 
 	// Fetch the latest commit for the repo
-	runOrFail(communicator.GitPullCmd)
+	util.RunOrFail(util.GitExecutable, util.GitPullSwitch)
 
 	// Set repository to given commit
-	resetCmd := communicator.GitResetToCommitCmd + " " + commit
-	runOrFail(resetCmd)
+	util.RunOrFail(util.GitExecutable, util.GitResetToCommitSwitch)
 
 	// Now run the actual tests
-	testOutput := runOrFail(communicator.GoTestCmd)
-	completeResult := communicator.ResMsg + communicator.Dash + testOutput
-	communicator.SendData(serverIP, serverPort, completeResult)
+	testOutput := util.RunOrFail(util.GoExecutable, util.GoTestSwitch)
+	completeResult := util.ResMsg + util.Dash + testOutput
+	util.SendData(serverIP, serverPort, completeResult)
 	testerBusy <- false
 }
 
@@ -123,12 +111,12 @@ func main() {
 	serverPortPtr := flag.String("sport", "8080", "Port of the scheduler server")
 
 	// Local repository path to observe
-	repoPathPtr := flag.String("rpath", communicator.EmptyStr, "Path to the repository folder to observe")
+	repoPathPtr := flag.String("rpath", util.EmptyStr, "Path to the repository folder to observe")
 
 	flag.Parse()
 
 	// Validate the local repository path
-	if *repoPathPtr == communicator.EmptyStr {
+	if *repoPathPtr == util.EmptyStr {
 		log.Fatal("Path to local repository folder required")
 	}
 
@@ -141,11 +129,11 @@ func main() {
 	log.Printf("Registering tester daemon to %s:%s \n", *serverIPPtr, *serverPortPtr)
 
 	// Register tester to the scheduler server
-	regInfo := communicator.RegMsg + communicator.Dash + *testerIPPtr + communicator.Colon + *testerPortPtr
+	regInfo := util.RegMsg + util.Dash + *testerIPPtr + util.Colon + *testerPortPtr
 
-	resp := communicator.SendAndReceiveData(*serverIPPtr, *serverPortPtr, regInfo)
+	resp := util.SendAndReceiveData(*serverIPPtr, *serverPortPtr, regInfo)
 
-	if resp != communicator.OkMsg {
+	if resp != util.OkMsg {
 		log.Fatalf("Cannot register tester to %s:%s\n", *serverIPPtr, *serverPortPtr)
 	}
 
