@@ -2,10 +2,10 @@ package util
 
 import (
 	"bufio"
-	"fmt"
 	"log"
 	"net"
 	"os/exec"
+	"time"
 )
 
 // FailMsg - string returned on error
@@ -29,11 +29,11 @@ const OkMsg = "OKAY"
 // Protocol - string denoting protocol to use for communication
 const Protocol = "tcp"
 
-// MsgDel - string to mark end of data
-const MsgDel = "'\n'"
-
 // MsgDelByte - Byte indicating end of data
-const MsgDelByte = '\n'
+const MsgDelByte = '|'
+
+// MsgDel - string to mark end of data
+const MsgDel = string(MsgDelByte)
 
 // Colon - string to denote Colon
 const Colon = ":"
@@ -48,8 +48,8 @@ const Dash = "-"
 const EmptyStr = ""
 
 // WaitInterval - integer representing interval to wait before
-// doing the same operation again
-const WaitInterval = 5
+// doing the same operation again in seconds
+const WaitInterval = 5 * time.Second
 
 // Version control system specific commands
 
@@ -79,31 +79,38 @@ var GoTestSwitch = []string{"test", "./..."}
 // SendAndReceiveData : Function to send given data
 // on the given ip and port. Returns the response
 func SendAndReceiveData(ip, port, data string) string {
-	server := ip + Colon + port
-	conn, err := net.Dial(Protocol, server)
-	if err != nil {
-		log.Println(err)
+	conn := SendData(ip, port, data)
+	if conn == nil {
+		log.Println("Cannot receive data without sending")
 		return FailMsg
 	}
-	fmt.Fprintf(conn, data+MsgDel)
-	resp, err := bufio.NewReader(conn).ReadString(MsgDelByte)
-	if err != nil {
-		log.Println(err)
+	resp, respErr := bufio.NewReader(conn).ReadBytes(MsgDelByte)
+	if respErr != nil {
+		log.Println(respErr)
 		return FailMsg
 	}
-	return resp
+	if closeErr := conn.Close(); closeErr != nil {
+		log.Println(closeErr)
+	}
+	return FormatResp(resp)
 }
 
 // SendData : Function to send given data
-// on the given ip and port.
-func SendData(ip, port, data string) {
+// on the given ip and port. Returns connection
+func SendData(ip, port, data string) net.Conn {
 	server := ip + Colon + port
-	conn, err := net.Dial(Protocol, server)
-	if err != nil {
-		log.Println(err)
-		return
+	log.Printf("Send %s to %s \n", data, server)
+	conn, connErr := net.Dial(Protocol, server)
+	if connErr != nil {
+		log.Println(connErr)
+		return nil
 	}
-	fmt.Fprintf(conn, data+MsgDel)
+	_, sendErr := conn.Write([]byte(data + MsgDel))
+	if sendErr != nil {
+		log.Println(sendErr)
+		return nil
+	}
+	return conn
 }
 
 // RunOrFail : Function to run a command and return
@@ -116,4 +123,11 @@ func RunOrFail(cmd string, arg []string) string {
 	}
 
 	return string(out)
+}
+
+// FormatResp : Returns formatted string representation
+// of the data after removing MsgDelByte
+func FormatResp(resp []byte) string {
+	resp = resp[:len(resp)-1]
+	return string(resp)
 }

@@ -16,6 +16,7 @@ var serverMutex = &sync.Mutex{}
 var commitTestersMap = make(map[string]string)
 var testersList = []string{}
 var commitsToTest = []string{}
+var serverAlive = make(chan bool)
 
 func listen(serverIP, serverPort string) {
 	server := serverIP + util.Colon + serverPort
@@ -29,13 +30,14 @@ func listen(serverIP, serverPort string) {
 
 	// Try to assign commits on failed testers to
 	// new testers
-	go recoverFailedTests(serverIP, serverPort)
+	go recoverFailedTests()
 
 	for {
 		conn, err := listner.Accept()
 		if err != nil {
-			log.Fatal(err)
 			listner.Close()
+			serverAlive <- false
+			log.Fatal(err)
 		}
 		go handleRequest(conn, serverIP, serverPort)
 	}
@@ -56,30 +58,40 @@ func writeResultToFile(hash, result string) {
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort string) {
-	resp, err := bufio.NewReader(conn).ReadString(util.MsgDelByte)
+	resp, err := bufio.NewReader(conn).ReadBytes(util.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
 	}
+	formattedResp := util.FormatResp(resp)
 
 	// Tokenize the protocol
-	msg := strings.Split(resp, util.Dash)
+	msg := strings.Split(formattedResp, util.Dash)
 
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
 	header := msg[0]
-	msgCont := msg[1]
 
 	if statMsg && header == util.StatMsg {
-		util.SendData(serverIP, serverPort, util.OkMsg)
+		_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
+		if err != nil {
+			log.Println(err)
+		} else {
+			log.Println("Told tester that I am alive")
+		}
 	} else {
 		serverMutex.Lock()
+		log.Println(msg)
+		msgCont := msg[1]
 		if contMsg && header == util.RegMsg {
 			testerInfo := msgCont
-			testersList = append(testersList, testerInfo)
-			tokens := strings.Split(testerInfo, util.Colon)
-			testerIP, testerPort := tokens[0], tokens[1]
-			util.SendData(testerIP, testerPort, util.OkMsg)
+			_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
+			if err != nil {
+				log.Println(err)
+			} else {
+				log.Printf("Added %s tester to the scheduler", testerInfo)
+				testersList = append(testersList, testerInfo)
+			}
 		} else if contMsg && header == util.ResMsg {
 			resForCommit := msg[1]
 			result := msg[2]
@@ -87,7 +99,25 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 			delete(commitTestersMap, resForCommit)
 		} else if contMsg && header == util.TestMsg {
 			commitToTest := msgCont
-			assignTester(commitToTest, serverIP, serverPort)
+			tester := getIdleTester()
+			if tester == util.EmptyStr {
+				commitsToTest = append(commitsToTest, commitToTest)
+				_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Printf("Told watcher that I cannot test for %s right now\n", commitToTest)
+				}
+			} else {
+				commitTestersMap[commitToTest] = tester
+				_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Printf("Told watcher that I have assigned test for %s to %s\n", commitToTest, tester)
+				}
+			}
+
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
 		}
@@ -96,27 +126,24 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 	conn.Close()
 }
 
-func assignTester(commitToTest, serverIP, serverPort string) {
-	commitAssigned := false
+func getIdleTester() string {
 	for _, tester := range testersList {
 		tokens := strings.Split(tester, util.Colon)
 		testerIP, testerPort := tokens[0], tokens[1]
 		resp := util.SendAndReceiveData(testerIP, testerPort, util.HelloMsg)
 		if resp == util.HelloMsg {
-			commitTestersMap[commitToTest] = tester
-			util.SendData(serverIP, serverPort, util.OkMsg)
-			commitAssigned = true
-			break
+			return tester
 		}
 	}
-	if commitAssigned == false {
-		commitsToTest = append(commitsToTest, commitToTest)
-		util.SendData(serverIP, serverPort, util.FailMsg)
-	}
+	return util.EmptyStr
 }
 
 func watchTesters() {
 	for {
+		alive := <-serverAlive
+		if alive == false {
+			return
+		}
 		for index := 0; index < len(testersList); index++ {
 			tokens := strings.Split(testersList[index], util.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
@@ -145,11 +172,19 @@ func getMapKeyFromValue(value string) string {
 	return ""
 }
 
-func recoverFailedTests(serverIP, serverPort string) {
+func recoverFailedTests() {
 	for {
+		alive := <-serverAlive
+		if alive == false {
+			return
+		}
 		for _, recoverCommit := range commitsToTest {
 			serverMutex.Lock()
-			assignTester(recoverCommit, serverIP, serverPort)
+			tester := getIdleTester()
+			if tester != util.EmptyStr {
+				commitTestersMap[recoverCommit] = tester
+				log.Printf("Assigned failed %s to %s", recoverCommit, tester)
+			}
 			serverMutex.Unlock()
 		}
 		time.Sleep(util.WaitInterval)

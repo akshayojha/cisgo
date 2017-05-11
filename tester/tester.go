@@ -25,14 +25,31 @@ func watchScheduler(serverIP, serverPort string) {
 	}
 }
 
+func registerTester(testerIP, testerPort, serverIP, serverPort string) {
+
+	log.Printf("Registering tester daemon to %s:%s \n", serverIP, serverPort)
+
+	regInfo := util.RegMsg + util.Dash + testerIP + util.Colon + testerPort
+
+	resp := util.SendAndReceiveData(serverIP, serverPort, regInfo)
+
+	if resp != util.OkMsg {
+		log.Fatalf("Cannot register tester to %s:%s\n", serverIP, serverPort)
+	} else {
+		log.Printf("Registered tester to %s:%s\n", serverIP, serverPort)
+	}
+}
+
 func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
+
 	server := testerIP + util.Colon + testerPort
 	listner, err := net.Listen(util.Protocol, server)
 	if err != nil {
 		log.Fatal(err)
 	}
-	listner.Close()
+
 	log.Printf("Listening on %s:%s \n", testerIP, testerPort)
+
 	for {
 		schedStatus := <-serverAlive
 		if schedStatus == false {
@@ -40,6 +57,7 @@ func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
 		}
 		conn, err := listner.Accept()
 		if err != nil {
+			listner.Close()
 			log.Fatal(err)
 		}
 		go handleRequest(conn, serverIP, serverPort, repo)
@@ -47,33 +65,49 @@ func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
-	resp, err := bufio.NewReader(conn).ReadString(util.MsgDelByte)
+	resp, err := bufio.NewReader(conn).ReadBytes(util.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
 	}
 
-	// Tokenize the protocol
-	msg := strings.Split(resp, util.Dash)
+	formattedResp := util.FormatResp(resp)
 
+	// Tokenize the protocol
+	msg := strings.Split(formattedResp, util.Dash)
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
 	header := msg[0]
-	msgCont := msg[1]
 
 	if statMsg && header == util.StatMsg {
-		util.SendData(serverIP, serverPort, util.OkMsg)
+		_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
+		if err != nil {
+			log.Println(err)
+		} else {
+			log.Printf("Told the server at %s:%s that I am alive/n", serverIP, serverPort)
+		}
 	} else {
+		msgCont := msg[1]
 		if contMsg && header == util.TestMsg {
 			busy := <-testerBusy
 			if busy == true {
-				util.SendData(serverIP, serverPort, util.FailMsg)
+				_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Printf("Told the server at %s:%s that I am busy/n", serverIP, serverPort)
+				}
 			} else {
 				commitToTest := msgCont
 				// Start running test for the
 				testerBusy <- true
 				go runTest(commitToTest, serverIP, serverPort, repo)
-				util.SendData(serverIP, serverPort, util.OkMsg)
+				_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
+				if err != nil {
+					log.Println(err)
+				} else {
+					log.Printf("Told the server at %s:%s that I have started running test for %s/n", serverIP, serverPort, commitToTest)
+				}
 			}
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
@@ -127,18 +161,10 @@ func main() {
 	}
 
 	log.Printf("Starting tester daemon at %s:%s watching %s \n", *testerIPPtr, *testerPortPtr, *repoPathPtr)
-	log.Printf("Registering tester daemon to %s:%s \n", *serverIPPtr, *serverPortPtr)
 
-	// Register tester to the scheduler server
-	regInfo := util.RegMsg + util.Dash + *testerIPPtr + util.Colon + *testerPortPtr
-
-	resp := util.SendAndReceiveData(*serverIPPtr, *serverPortPtr, regInfo)
-
-	if resp != util.OkMsg {
-		log.Fatalf("Cannot register tester to %s:%s\n", *serverIPPtr, *serverPortPtr)
-	}
+	registerTester(*testerIPPtr, *testerPortPtr, *serverIPPtr, *serverPortPtr)
 
 	go watchScheduler(*serverIPPtr, *serverPortPtr)
 
-	go listen(*testerIPPtr, *testerPortPtr, *repoPathPtr, *serverIPPtr, *serverPortPtr)
+	listen(*testerIPPtr, *testerPortPtr, *repoPathPtr, *serverIPPtr, *serverPortPtr)
 }

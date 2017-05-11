@@ -12,18 +12,18 @@ func watch(serverIP, serverPort, repoFolder string) {
 	// Watch every interval seconds for any new commit by the developer
 	for {
 		// Get the most recent commit hash
-		lastCommitHash := util.RunOrFail(util.GitExecutable, util.GitPullSwitch)
+		lastCommitHash := util.RunOrFail(util.GitExecutable, util.GitHashSwitch)
 
 		// Fetch the latest commit for the repo
 		util.RunOrFail(util.GitExecutable, util.GitPullSwitch)
 
 		// Get the latest commit hash
-		latestCommitHash := util.RunOrFail(util.GitExecutable, util.GitPullSwitch)
+		latestCommitHash := util.RunOrFail(util.GitExecutable, util.GitHashSwitch)
 
 		if lastCommitHash != latestCommitHash {
 			resp := util.SendAndReceiveData(serverIP, serverPort, util.StatMsg)
 			if resp == util.OkMsg {
-				resp := util.SendAndReceiveData(serverIP, serverPort, latestCommitHash+util.MsgDel)
+				resp := util.SendAndReceiveData(serverIP, serverPort, latestCommitHash)
 				if resp == util.OkMsg {
 					log.Printf("Scheduled tests for %s \n", latestCommitHash)
 				} else {
