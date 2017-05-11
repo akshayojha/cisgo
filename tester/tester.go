@@ -90,7 +90,8 @@ func runTest(commit, serverIP, serverPort, repo string) {
 	util.RunOrFail(util.GitExecutable, util.GitPullSwitch)
 
 	// Set repository to given commit
-	util.RunOrFail(util.GitExecutable, util.GitResetToCommitSwitch)
+	resetToCommitSwitch := append(util.GitResetToCommitSwitch, commit)
+	util.RunOrFail(util.GitExecutable, resetToCommitSwitch)
 
 	// Now run the actual tests
 	testOutput := util.RunOrFail(util.GoExecutable, util.GoTestSwitch)
