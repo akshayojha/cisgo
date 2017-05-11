@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"communicator"
+	"cisgo/src/communicator"
 	"flag"
 	"log"
 	"net"
@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-var serverMutex = sync.Mutex
+var serverMutex = &sync.Mutex{}
 var commitTestersMap = make(map[string]string)
 var testersList = []string{}
 var commitsToTest = []string{}
@@ -49,7 +49,7 @@ func writeResultToFile(hash, result string) {
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort string) {
-	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDel)
+	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
@@ -60,8 +60,8 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
-	header := msg[:1]
-	msgCont := msg[1:]
+	header := msg[0]
+	msgCont := msg[1]
 
 	if statMsg && header == communicator.StatMsg {
 		communicator.SendData(serverIP, serverPort, communicator.OkMsg)
@@ -74,10 +74,10 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 			testerIP, testerPort := tokens[0], tokens[1]
 			communicator.SendData(testerIP, testerPort, communicator.OkMsg)
 		} else if contMsg && header == communicator.ResMsg {
-			resForCommit := msgCont[0]
-			result := msgCont[1:]
+			resForCommit := msg[1]
+			result := msg[2]
 			writeResultToFile(resForCommit, result)
-			delete(commitTestersMap[resForCommit])
+			delete(commitTestersMap, resForCommit)
 		} else if contMsg && header == communicator.TestMsg {
 			commitToTest := msgCont
 			assignTester(commitToTest, serverIP, serverPort)
@@ -111,16 +111,16 @@ func assignTester(commitToTest, serverIP, serverPort string) {
 func watchTesters() {
 	for {
 		for index := 0; index < len(testersList); index++ {
-			tokens := strings.Split(testersList[i], communicator.Colon)
+			tokens := strings.Split(testersList[index], communicator.Colon)
 			testerIP, testerPort := tokens[0], tokens[1]
 			resp := communicator.SendAndReceiveData(testerIP, testerPort, communicator.StatMsg)
 			if resp != communicator.OkMsg {
 				serverMutex.Lock()
 				log.Printf("Removing tester running at %s:%s\n", testerIP, testerPort)
 				// Remove the tester
-				failedCommit := getMapKeyFromValue(testersList[i])
+				failedCommit := getMapKeyFromValue(testersList[index])
 				commitsToTest = append(commitsToTest, failedCommit)
-				testersList = append(testersList[:index], testersList[index+1:])
+				testersList = append(testersList[:index], testersList[index+1:]...)
 				serverMutex.Unlock()
 			}
 		}
@@ -128,20 +128,21 @@ func watchTesters() {
 	}
 }
 
-func getMapKeyFromValue(value string) {
+func getMapKeyFromValue(value string) string {
 	for k, v := range commitTestersMap {
 		if v == value {
 			return k
 		}
 	}
 	log.Fatalf("Can't find value %s in %s\n", value, commitTestersMap)
+	return ""
 }
 
 func recoverFailedTests(serverIP, serverPort string) {
 	for {
 		for _, recoverCommit := range commitsToTest {
 			serverMutex.Lock()
-			assignTester(recoverCommit)
+			assignTester(recoverCommit, serverIP, serverPort)
 			serverMutex.Unlock()
 		}
 		time.Sleep(communicator.WaitInterval)

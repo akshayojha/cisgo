@@ -2,7 +2,7 @@ package main
 
 import (
 	"bufio"
-	"communicator"
+	"cisgo/src/communicator"
 	"flag"
 	"log"
 	"net"
@@ -43,12 +43,12 @@ func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		go handleRequest(conn, serverIP, serverPort)
+		go handleRequest(conn, serverIP, serverPort, repo)
 	}
 }
 
 func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
-	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDel)
+	resp, err := bufio.NewReader(conn).ReadString(communicator.MsgDelByte)
 
 	if err != nil {
 		log.Println(err)
@@ -59,8 +59,8 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 
 	statMsg := len(msg) == 1
 	contMsg := len(msg) > 1
-	header := msg[:1]
-	msgCont := msg[1:]
+	header := msg[0]
+	msgCont := msg[1]
 
 	if statMsg && header == communicator.StatMsg {
 		communicator.SendData(serverIP, serverPort, communicator.OkMsg)
@@ -73,7 +73,7 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 				commitToTest := msgCont
 				// Start running test for the
 				testerBusy <- true
-				go runTest(commitToTest, repo)
+				go runTest(commitToTest, serverIP, serverPort, repo)
 				communicator.SendData(serverIP, serverPort, communicator.OkMsg)
 			}
 		} else {
@@ -83,7 +83,7 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 	conn.Close()
 }
 
-func runOrFail(cmd string) string {
+func runOrFail(cmd string, arg string) string {
 	out, err := exec.Command(cmd, arg)
 
 	if err != nil {
@@ -93,7 +93,7 @@ func runOrFail(cmd string) string {
 	return out
 }
 
-func runTest(commit, repo, serverIP, serverPort string) {
+func runTest(commit, serverIP, serverPort, repo string) {
 	// Clean the repo
 	runOrFail(communicator.GitCleanCmd)
 
@@ -101,7 +101,7 @@ func runTest(commit, repo, serverIP, serverPort string) {
 	runOrFail(communicator.GitPullCmd)
 
 	// Set repository to given commit
-	resetCmd := communicator.GitResetCmd + " " + commit
+	resetCmd := communicator.GitResetToCommitCmd + " " + commit
 	runOrFail(resetCmd)
 
 	// Now run the actual tests
@@ -133,7 +133,7 @@ func main() {
 	}
 
 	// Navigate to the local repository path
-	if _, err := os.Chdir(*repoPathPtr); err != nil {
+	if err := os.Chdir(*repoPathPtr); err != nil {
 		log.Fatal(err)
 	}
 
@@ -141,7 +141,7 @@ func main() {
 	log.Printf("Registering tester daemon to %s:%s \n", *serverIPPtr, *serverPortPtr)
 
 	// Register tester to the scheduler server
-	regInfo := communicator.RegMsg + communicator.Dash + testerIPPtr + communicator.Colon + testerPortPtr
+	regInfo := communicator.RegMsg + communicator.Dash + *testerIPPtr + communicator.Colon + *testerPortPtr
 
 	resp := communicator.SendAndReceiveData(*serverIPPtr, *serverPortPtr, regInfo)
 

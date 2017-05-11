@@ -29,7 +29,10 @@ const OkMsg = "OKAY"
 const Protocol = "tcp"
 
 // MsgDel - string to mark end of data
-const MsgDel = '\n'
+const MsgDel = "'\n'"
+
+// MsgDelByte - Byte indicating end of data
+const MsgDelByte = '\n'
 
 // Colon - string to denote Colon
 const Colon = ":"
@@ -69,14 +72,14 @@ const GoTestCmd = "go test ./..."
 // SendAndReceiveData : Function to send given data
 // on the given ip and port. Returns the response
 func SendAndReceiveData(ip, port, data string) string {
-	server = ip + Colon + port
+	server := ip + Colon + port
 	conn, err := net.Dial(Protocol, server)
 	if err != nil {
 		log.Println(err)
 		return FailMsg
 	}
 	fmt.Fprintf(conn, data+MsgDel)
-	resp, err := bufio.NewReader(conn).ReadString(MsgDel)
+	resp, err := bufio.NewReader(conn).ReadString(MsgDelByte)
 	if err != nil {
 		log.Println(err)
 		return FailMsg
@@ -87,7 +90,7 @@ func SendAndReceiveData(ip, port, data string) string {
 // SendData : Function to send given data
 // on the given ip and port.
 func SendData(ip, port, data string) {
-	server = ip + Colon + port
+	server := ip + Colon + port
 	conn, err := net.Dial(Protocol, server)
 	if err != nil {
 		log.Println(err)

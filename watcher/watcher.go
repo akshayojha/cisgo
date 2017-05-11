@@ -1,7 +1,7 @@
 package main
 
 import (
-	"communicator"
+	"cisgo/src/communicator"
 	"flag"
 	"fmt"
 	"log"
@@ -76,7 +76,7 @@ func main() {
 	}
 
 	// Navigate to the local repository path
-	if _, err := os.Chdir(*repoPathPtr); err != nil {
+	if err := os.Chdir(*repoPathPtr); err != nil {
 		log.Fatal(err)
 	}
 
