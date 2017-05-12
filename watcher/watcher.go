@@ -8,6 +8,16 @@ import (
 	"time"
 )
 
+func watchScheduler(serverIP, serverPort string) {
+	for {
+		resp := util.SendAndReceiveData(serverIP, serverPort, util.StatMsg)
+		if resp != util.OkMsg {
+			log.Fatalf("Scheduler at %s:%s is no longer active\n", serverIP, serverPort)
+		}
+		time.Sleep(util.WaitInterval)
+	}
+}
+
 func watch(serverIP, serverPort, repoFolder string) {
 	// Watch every interval seconds for any new commit by the developer
 	for {
@@ -23,7 +33,8 @@ func watch(serverIP, serverPort, repoFolder string) {
 		if lastCommitHash != latestCommitHash {
 			resp := util.SendAndReceiveData(serverIP, serverPort, util.StatMsg)
 			if resp == util.OkMsg {
-				resp := util.SendAndReceiveData(serverIP, serverPort, latestCommitHash)
+				commitMsg := util.TestMsg + util.Dash + latestCommitHash
+				resp := util.SendAndReceiveData(serverIP, serverPort, commitMsg)
 				if resp == util.OkMsg {
 					log.Printf("Scheduled tests for %s \n", latestCommitHash)
 				} else {
@@ -63,6 +74,8 @@ func main() {
 	}
 
 	log.Printf("Watching %s at %s:%s \n", *repoPathPtr, *schedServerIPPtr, *schedServerPortPtr)
+
+	go watchScheduler(*schedServerIPPtr, *schedServerPortPtr)
 
 	// Start watching the given repository path
 	watch(*schedServerIPPtr, *schedServerPortPtr, *repoPathPtr)

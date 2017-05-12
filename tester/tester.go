@@ -11,17 +11,15 @@ import (
 	"time"
 )
 
-var serverAlive = make(chan bool)
-var testerBusy = make(chan bool)
+var testerBusy = make(chan bool, 1)
 
 func watchScheduler(serverIP, serverPort string) {
 	for {
+		time.Sleep(util.WaitInterval)
 		resp := util.SendAndReceiveData(serverIP, serverPort, util.StatMsg)
 		if resp != util.OkMsg {
 			log.Fatalf("Scheduler at %s:%s is no longer active\n", serverIP, serverPort)
-			serverAlive <- false
 		}
-		time.Sleep(util.WaitInterval)
 	}
 }
 
@@ -51,10 +49,6 @@ func listen(testerIP, testerPort, repo, serverIP, serverPort string) {
 	log.Printf("Listening on %s:%s \n", testerIP, testerPort)
 
 	for {
-		schedStatus := <-serverAlive
-		if schedStatus == false {
-			log.Fatalf("Shutting down the tester daemon at %s:%s", testerIP, testerPort)
-		}
 		conn, err := listner.Accept()
 		if err != nil {
 			listner.Close()
@@ -83,31 +77,35 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 		_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
 		if err != nil {
 			log.Println(err)
-		} else {
-			log.Printf("Told the server at %s:%s that I am alive/n", serverIP, serverPort)
+		}
+	} else if statMsg && header == util.HelloMsg {
+		_, err := conn.Write([]byte(util.HelloMsg + util.MsgDel))
+		if err != nil {
+			log.Println(err)
 		}
 	} else {
-		msgCont := msg[1]
 		if contMsg && header == util.TestMsg {
-			busy := <-testerBusy
-			if busy == true {
-				_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
+			log.Println("Got test request")
+			select {
+			case busy := <-testerBusy:
+				if busy == true {
+					_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
+					if err != nil {
+						log.Println(err)
+					} else {
+						log.Println("Tester idle now")
+					}
+				}
+			default:
+				log.Println("Cant read so assuming idle")
+				_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
 				if err != nil {
 					log.Println(err)
-				} else {
-					log.Printf("Told the server at %s:%s that I am busy/n", serverIP, serverPort)
 				}
-			} else {
-				commitToTest := msgCont
-				// Start running test for the
+				commitToTest := msg[1]
+				// Start running test for the commit
 				testerBusy <- true
-				go runTest(commitToTest, serverIP, serverPort, repo)
-				_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
-				if err != nil {
-					log.Println(err)
-				} else {
-					log.Printf("Told the server at %s:%s that I have started running test for %s/n", serverIP, serverPort, commitToTest)
-				}
+				runTest(commitToTest, serverIP, serverPort, repo)
 			}
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
@@ -129,9 +127,14 @@ func runTest(commit, serverIP, serverPort, repo string) {
 
 	// Now run the actual tests
 	testOutput := util.RunOrFail(util.GoExecutable, util.GoTestSwitch)
-	completeResult := util.ResMsg + util.Dash + testOutput
+	completeResult := util.ResMsg + util.Dash + commit + util.Dash + testOutput
 	util.SendData(serverIP, serverPort, completeResult)
-	testerBusy <- false
+	select {
+	case testerBusy <- false:
+		log.Println("Done with the test, idle now")
+	default:
+		log.Println("Can't notify that I am idle now")
+	}
 }
 
 func main() {
@@ -139,7 +142,7 @@ func main() {
 
 	// Scheduler information
 	testerIPPtr := flag.String("tip", "localhost", "IP address of the tester")
-	testerPortPtr := flag.String("tport", "0", "Port of the tester")
+	testerPortPtr := flag.String("tport", util.EmptyStr, "Port of the tester")
 
 	// Scheduler information required to setup the server
 	serverIPPtr := flag.String("sip", "localhost", "IP address of the scheduler server")
@@ -160,7 +163,11 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Printf("Starting tester daemon at %s:%s watching %s \n", *testerIPPtr, *testerPortPtr, *repoPathPtr)
+	if *testerPortPtr == util.EmptyStr {
+		*testerPortPtr = util.GetRandomPortStr()
+	}
+
+	log.Printf("Starting tester daemon at %s:%s watching %s", *testerIPPtr, *testerPortPtr, *repoPathPtr)
 
 	registerTester(*testerIPPtr, *testerPortPtr, *serverIPPtr, *serverPortPtr)
 

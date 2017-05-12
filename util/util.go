@@ -5,6 +5,8 @@ import (
 	"log"
 	"net"
 	"os/exec"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -121,8 +123,8 @@ func RunOrFail(cmd string, arg []string) string {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	return string(out)
+	ans := string(out)
+	return strings.TrimSpace(ans)
 }
 
 // FormatResp : Returns formatted string representation
@@ -130,4 +132,21 @@ func RunOrFail(cmd string, arg []string) string {
 func FormatResp(resp []byte) string {
 	resp = resp[:len(resp)-1]
 	return string(resp)
+}
+
+// GetRandomPortStr : Returns string denoting random port
+// number in range of allowed port numbers
+func GetRandomPortStr() string {
+	addr, err := net.ResolveTCPAddr(Protocol, "localhost:0")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	l, err := net.ListenTCP(Protocol, addr)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer l.Close()
+	port := l.Addr().(*net.TCPAddr).Port
+	return strconv.FormatUint(uint64(port), 10)
 }
