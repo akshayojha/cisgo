@@ -38,37 +38,37 @@ go get github.com/akshayojha/cisgo
 
 Run the scheduler at desired ip and port
 
-Usage of ./scheduler:
--sip string
-    IP address of the scheduler server (default "localhost")
--sport string
-    Port of the scheduler server (default "8080")
+Usage of ./scheduler: <br/>
+-sip string <br/>
+    IP address of the scheduler server (default "localhost") <br/>
+-sport string <br/>
+    Port of the scheduler server (default "8080") <br/>
 
 Run the tester and provide it the address of the Scheduler and also a local copy
 of the git repository
 
-Usage of ./tester:
--rpath string
-  	Path to the repository folder to run tests from
--sip string
-  	IP address of the scheduler server (default "localhost")
--sport string
-  	Port of the scheduler server (default "8080")
--tip string
-  	IP address of the tester (default "localhost")
--tport string
-  	Port of the tester
+Usage of ./tester: <br/>
+-rpath string <br/>
+  	Path to the repository folder to run tests from <br/>
+-sip string <br/>
+  	IP address of the scheduler server (default "localhost") <br/>
+-sport string <br/>
+  	Port of the scheduler server (default "8080")<br/>
+-tip string<br/>
+  	IP address of the tester (default "localhost")<br/>
+-tport string<br/>
+  	Port of the tester<br/>
 
 Run the watcher finally and provide it the address of the Scheduler along with
 another local copy of the repository
 
-Usage of ./watcher:
-  -rpath string
-    	Path to the repository folder to observe
-  -sip string
-    	IP address of the scheduler server (default "localhost")
-  -sport string
-    	Port of the scheduler server (default "8080")
+Usage of ./watcher:<br/>
+  -rpath string<br/>
+    	Path to the repository folder to observe<br/>
+  -sip string<br/>
+    	IP address of the scheduler server (default "localhost")<br/>
+  -sport string<br/>
+    	Port of the scheduler server (default "8080")<br/>
 
 # TODO
 
@@ -81,4 +81,4 @@ watch repository all the time
 
 # Known Bugs
 
-- Scheduler is not fault tolerant. If it terminates every other component goes download
+- Scheduler is not fault tolerant. If it terminates every other component goes down
