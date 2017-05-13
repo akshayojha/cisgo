@@ -23,7 +23,8 @@ to communicate in case a new commit has been made. Similarly, the testers are fe
 the address of the Scheduler to whom they register and report the results.
 
 The project has an important utility component which contains common functions to
-be used by all three components.
+be used by all three components. Also, the watcher and each tester need a locally
+stored copy of the github repository, which they use to observe and run tests from.
 
 # Usage
 
@@ -33,4 +34,51 @@ go get github.com/akshayojha/cisgo
 
 - Navigate into your $GOPATH/src/github.com/akshayojha/cisgo
 - Run make
-- Navigate into you $GOPATH/bin/ and run the following:
+- Navigate into you $GOPATH/bin/ and run in the following order:
+
+Run the scheduler at desired ip and port
+
+Usage of ./scheduler:
+-sip string
+    IP address of the scheduler server (default "localhost")
+-sport string
+    Port of the scheduler server (default "8080")
+
+Run the tester and provide it the address of the Scheduler and also a local copy
+of the git repository
+
+Usage of ./tester:
+-rpath string
+  	Path to the repository folder to run tests from
+-sip string
+  	IP address of the scheduler server (default "localhost")
+-sport string
+  	Port of the scheduler server (default "8080")
+-tip string
+  	IP address of the tester (default "localhost")
+-tport string
+  	Port of the tester
+
+Run the watcher finally and provide it the address of the Scheduler along with
+another local copy of the repository
+
+Usage of ./watcher:
+  -rpath string
+    	Path to the repository folder to observe
+  -sip string
+    	IP address of the scheduler server (default "localhost")
+  -sport string
+    	Port of the scheduler server (default "8080")
+
+# TODO
+
+- Add logic to implement post commit hooks of github so that we don't have to
+watch repository all the time
+
+- Improve performance and fault tolerance
+
+- Make the code configurable by using a json formatted config file
+
+# Known Bugs
+
+- Scheduler is not fault tolerant. If it terminates every other component goes download

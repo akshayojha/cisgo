@@ -149,7 +149,7 @@ func main() {
 	serverPortPtr := flag.String("sport", "8080", "Port of the scheduler server")
 
 	// Local repository path to observe
-	repoPathPtr := flag.String("rpath", util.EmptyStr, "Path to the repository folder to observe")
+	repoPathPtr := flag.String("rpath", util.EmptyStr, "Path to the repository folder to run tests from")
 
 	flag.Parse()
 
