@@ -78,11 +78,6 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 		if err != nil {
 			log.Println(err)
 		}
-	} else if statMsg && header == util.HelloMsg {
-		_, err := conn.Write([]byte(util.HelloMsg + util.MsgDel))
-		if err != nil {
-			log.Println(err)
-		}
 	} else {
 		if contMsg && header == util.TestMsg {
 			log.Println("Got test request")
@@ -104,8 +99,19 @@ func handleRequest(conn net.Conn, serverIP, serverPort, repo string) {
 				}
 				commitToTest := msg[1]
 				// Start running test for the commit
-				testerBusy <- true
+				select {
+				case testerBusy <- true:
+					log.Println("Making this tester busy now")
+				default:
+					log.Println("Can't notify that I am busy now")
+				}
 				runTest(commitToTest, serverIP, serverPort, repo)
+				select {
+				case <-testerBusy:
+					log.Println("Done with the test, idle now")
+				default:
+					log.Println("Can't notify that I am idle now")
+				}
 			}
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
@@ -129,12 +135,6 @@ func runTest(commit, serverIP, serverPort, repo string) {
 	testOutput := util.RunOrFail(util.GoExecutable, util.GoTestSwitch)
 	completeResult := util.ResMsg + util.Dash + commit + util.Dash + testOutput
 	util.SendData(serverIP, serverPort, completeResult)
-	select {
-	case testerBusy <- false:
-		log.Println("Done with the test, idle now")
-	default:
-		log.Println("Can't notify that I am idle now")
-	}
 }
 
 func main() {

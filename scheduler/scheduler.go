@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"cisgo/util"
 	"flag"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -88,23 +87,19 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 			delete(commitTestersMap, resForCommit)
 		} else if contMsg && header == util.TestMsg {
 			commitToTest := msg[1]
-			tester := getIdleTester()
-			if tester == util.EmptyStr {
-				sendFailMsgToWatcher(conn, commitToTest)
-			} else {
-				done := tryAssigningCommit(tester, commitToTest, formattedResp)
-				if done == false {
-					sendFailMsgToWatcher(conn, commitToTest)
+			tester := getIdleTester(formattedResp)
+			commitsToTest = append(commitsToTest, commitToTest)
+			if tester != util.EmptyStr {
+				commitTestersMap[commitToTest] = tester
+				removeCommitFromPending(commitToTest)
+				_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
+				if err != nil {
+					log.Println(err)
 				} else {
-					commitTestersMap[commitToTest] = tester
-					removeCommitFromPending(commitToTest)
-					_, err := conn.Write([]byte(util.OkMsg + util.MsgDel))
-					if err != nil {
-						log.Println(err)
-					} else {
-						log.Printf("Assigned test for %s to %s\n", commitToTest, tester)
-					}
+					log.Printf("Assigned test for %s to %s\n", commitToTest, tester)
 				}
+			} else {
+				sendFailMsgToWatcher(conn, commitToTest)
 			}
 		} else {
 			log.Printf("Unknown Request %s\n", resp)
@@ -114,18 +109,7 @@ func handleRequest(conn net.Conn, serverIP, serverPort string) {
 	conn.Close()
 }
 
-func tryAssigningCommit(tester, commitToTest, testInfo string) bool {
-	tokens := strings.Split(tester, util.Colon)
-	testerIP, testerPort := tokens[0], tokens[1]
-	resp := util.SendAndReceiveData(testerIP, testerPort, testInfo)
-	if resp == util.OkMsg {
-		return true
-	}
-	return false
-}
-
 func sendFailMsgToWatcher(conn net.Conn, commitToTest string) {
-	commitsToTest = append(commitsToTest, commitToTest)
 	_, err := conn.Write([]byte(util.FailMsg + util.MsgDel))
 	if err != nil {
 		log.Println(err)
@@ -134,12 +118,12 @@ func sendFailMsgToWatcher(conn net.Conn, commitToTest string) {
 	}
 }
 
-func getIdleTester() string {
+func getIdleTester(testInfo string) string {
 	for _, tester := range testersList {
 		tokens := strings.Split(tester, util.Colon)
 		testerIP, testerPort := tokens[0], tokens[1]
-		resp := util.SendAndReceiveData(testerIP, testerPort, util.HelloMsg)
-		if resp == util.HelloMsg {
+		resp := util.SendAndReceiveData(testerIP, testerPort, testInfo)
+		if resp == util.OkMsg {
 			return tester
 		}
 	}
@@ -182,7 +166,6 @@ func removeCommitFromPending(commit string) {
 	for index := 0; index < len(commitsToTest); index++ {
 		if commitsToTest[index] == commit {
 			commitsToTest = append(commitsToTest[:index], commitsToTest[index+1:]...)
-			fmt.Println(commitsToTest)
 			return
 		}
 	}
@@ -194,15 +177,12 @@ func recoverFailedTests() {
 		log.Println("Commits to test", commitsToTest)
 		for _, recoverCommit := range commitsToTest {
 			serverMutex.Lock()
-			tester := getIdleTester()
+			testInfo := util.TestMsg + util.Dash + recoverCommit
+			tester := getIdleTester(testInfo)
 			if tester != util.EmptyStr {
-				testInfo := util.TestMsg + util.Dash + recoverCommit
-				done := tryAssigningCommit(tester, recoverCommit, testInfo)
-				if done {
-					commitTestersMap[recoverCommit] = tester
-					removeCommitFromPending(recoverCommit)
-					log.Printf("Assigned failed %s to %s", recoverCommit, tester)
-				}
+				commitTestersMap[recoverCommit] = tester
+				removeCommitFromPending(recoverCommit)
+				log.Printf("Assigned failed %s to %s", recoverCommit, tester)
 			}
 			serverMutex.Unlock()
 		}

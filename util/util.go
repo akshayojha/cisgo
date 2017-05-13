@@ -22,6 +22,9 @@ const RegMsg = "REGISTER"
 // TestMsg - string used to request tests for a commit
 const TestMsg = "TEST"
 
+// BusyMsg - string used to request tests for a commit
+const BusyMsg = "BUSY"
+
 // StatMsg - string used to get status of the server
 const StatMsg = "STATUS"
 
